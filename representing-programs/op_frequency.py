@@ -4,9 +4,10 @@ from collections import defaultdict
 
 def op_frequency(ir):
     freqs = defaultdict(int)
-    for instr in ir['functions'][0]['instrs']:
-        if 'op' in instr:
-            freqs[instr['op']] += 1
+    for function in ir['functions']:
+        for instr in function['instrs']:
+            if 'op' in instr:
+                freqs[instr['op']] += 1
 
     return dict(freqs)
 
