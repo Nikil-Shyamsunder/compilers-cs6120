@@ -14,7 +14,12 @@ def op_frequency(ir):
 if __name__ == "__main__":
     # load json from stdin
     bril = json.load(sys.stdin)
-    print(op_frequency(bril))
+    op_freqs = op_frequency(bril)
+
+    sorted_items = sorted(op_freqs.items())
+    for k, v in sorted_items:
+        print(f"{k}: {v}")
+
     # print(cfg)
 
 
