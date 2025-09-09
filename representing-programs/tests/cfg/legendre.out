@@ -1,1 +1,1 @@
-{'block0': ['loop'], 'loop': ['end', 'body'], 'body': ['loop'], 'end': ['block4'], 'block4': ['then.0', 'else.0'], 'then.0': [], 'else.0': []}
+[('main-block0', ['loop']), ('loop', ['end', 'body']), ('body', ['loop']), ('end', []), ('naivePower-block0', ['then.0', 'else.0']), ('then.0', []), ('else.0', [])]
