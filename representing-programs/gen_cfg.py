@@ -24,6 +24,7 @@ def gen_basic_blocks(ir):
 
     return basic_blocks
 
+
 def get_label(basic_blocks, idx):
     block = basic_blocks[idx]
     if 'label' in block[0]:
@@ -41,15 +42,18 @@ def build_cfg(basic_blocks):
         label = get_label(basic_blocks, i)
 
         next = []
-        op = basic_block[-1]['op']
-        if op == 'br' or op == 'jmp':
-            next += basic_block[-1]['labels']
-        elif op == 'ret':
-            pass # next should stay empty
-        elif i + 1 < len(basic_blocks): # there is a next block
-            next = [get_label(basic_blocks, i + 1)]
+        if 'op' not in basic_block[-1]: # we have a label with nothing after
+            pass
         else:
-            pass # next should stay 
+            op = basic_block[-1]['op']
+            if op == 'br' or op == 'jmp':
+                next += basic_block[-1]['labels']
+            elif op == 'ret':
+                pass # next should stay empty
+            elif i + 1 < len(basic_blocks): # there is a next block
+                next = [get_label(basic_blocks, i + 1)]
+            else:
+                pass # next should stay 
             
         cfg[label] = next
     
@@ -68,5 +72,4 @@ if __name__ == "__main__":
     cfg = build_cfg(basic_blocks)
     print(cfg)
     # print(cfg)
-
 
