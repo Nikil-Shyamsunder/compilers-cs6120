@@ -142,44 +142,121 @@ static vector<vector<json>> elim_dead_blocks(vector<pair<string, vector<string>>
 //     return new_function;
 // }
 
-static vector<json> local_tdce(const vector<json>& block) {
-    int numDeleted = 1;
-    vector<json> new_block = block;
-    vector<json> curr_block;
+// static vector<json> local_tdce(const vector<json>& block) {
+//     int numDeleted = 1;
+//     vector<json> new_block = block;
+//     vector<json> curr_block;
 
-    while (numDeleted != 0) {
-        curr_block = new_block;
-        new_block.clear();
-        numDeleted = 0;
-        unordered_set<string> curr_used;
+//     while (numDeleted != 0) {
+//         curr_block = new_block;
+//         new_block.clear();
+//         numDeleted = 0;
+//         unordered_set<string> curr_used;
 
-        // iterate in reverse through block 
-        for (int i = curr_block.size() - 1; i >= 0; --i) {
-            json stmt = curr_block[i];
-            if (stmt.contains("args")){
-                for (const auto& arg : stmt.at("args")) {
-                    // insert is idempotent
-                    curr_used.insert(arg.get<string>());
-                }
-            }
+//         // iterate in reverse through block 
+//         for (int i = curr_block.size() - 1; i >= 0; --i) {
+//             json stmt = curr_block[i];
+//             if (stmt.contains("args")){
+//                 for (const auto& arg : stmt.at("args")) {
+//                     // insert is idempotent
+//                     curr_used.insert(arg.get<string>());
+//                 }
+//             }
             
-            // if we have an assignment stmt
-            if (stmt.contains("dest")) {
-                if (curr_used.find(stmt.at("dest").get<string>()) != curr_used.end()) {
-                    // if this is the newest assignment of the var
-                    curr_used.erase(stmt.at("dest").get<string>());
-                } else { // redundant assignment or completely unused var
-                    numDeleted += 1;
-                    continue; // don't add to the updated block
-                }  
-            } 
+//             // if we have an assignment stmt
+//             if (stmt.contains("dest")) {
+//                 if (curr_used.find(stmt.at("dest").get<string>()) != curr_used.end()) {
+//                     // if this is the newest assignment of the var
+//                     curr_used.erase(stmt.at("dest").get<string>());
+//                 } else { // redundant assignment or completely unused var
+//                     numDeleted += 1;
+//                     continue; // don't add to the updated block
+//                 }  
+//             } 
             
-            new_block.insert(new_block.begin(), stmt);
-        } 
+//             new_block.insert(new_block.begin(), stmt);
+//         } 
+//     }
+//     // cout << new_block << "\n";
+//     // convergence achieved, return new_block
+//     return new_block;
+// }
+
+// ---- small helpers ----
+static inline bool has_dest(const json& instr) {
+    return instr.contains("dest") && instr["dest"].is_string();
+}
+static inline std::vector<std::string> get_args(const json& instr) {
+    std::vector<std::string> out;
+    if (instr.contains("args") && instr["args"].is_array()) {
+        out.reserve(instr["args"].size());
+        for (const auto& a : instr["args"]) out.push_back(a.get<std::string>());
     }
-    // cout << new_block << "\n";
-    // convergence achieved, return new_block
-    return new_block;
+    return out;
+}
+
+
+static std::vector<json> local_tdce(const std::vector<json>& block) {
+    // state[x] = 0 (unseen), 1 (seen later def, no use yet), 2 (used since)
+    enum { UNSEEN = 0, LATER_DEF_NO_USE = 1, USED_SINCE = 2 };
+    std::unordered_map<std::string, int> state;
+
+    std::vector<json> out_rev;
+    out_rev.reserve(block.size());
+
+    for (int i = (int)block.size() - 1; i >= 0; --i) {
+        const json& instr = block[i];
+        bool keep = true;
+
+        if (has_dest(instr)) {
+            const std::string x = instr["dest"].get<std::string>();
+            auto it = state.find(x);
+
+            if (it != state.end() && it->second == LATER_DEF_NO_USE) {
+                keep = false;
+            }
+            if (keep) {
+                state[x] = LATER_DEF_NO_USE;
+            }
+        }
+
+        if (keep) {
+            for (const auto& a : get_args(instr)) state[a] = USED_SINCE;
+            out_rev.push_back(instr);
+        }
+    }
+
+    std::reverse(out_rev.begin(), out_rev.end());
+    return out_rev;
+}
+
+
+static bool drop_globally_unused_once(json& func) {
+    std::unordered_set<std::string> used;
+    for (const auto& instr : func["instrs"]) {
+        for (const auto& a : get_args(instr)) used.insert(a);
+    }
+
+    std::vector<json> filtered;
+    filtered.reserve(func["instrs"].size());
+    for (const auto& instr : func["instrs"]) {
+        if (has_dest(instr)) {
+            const std::string d = instr["dest"].get<std::string>();
+            if (used.find(d) == used.end()) {
+                continue;
+            }
+        }
+        filtered.push_back(instr);
+    }
+
+    bool changed = (filtered.size() != func["instrs"].size());
+    func["instrs"] = std::move(filtered);
+    return changed;
+}
+
+static void optimize_globally_unused_vars(json& func) {
+    // Iterate to fixed point 
+    while (drop_globally_unused_once(func)) { /* keep going */ }
 }
 
 // triple of (op, val1, val2) or (const, val)
@@ -347,25 +424,36 @@ int main() {
     // Collect cfg items across all functions
     json dce_functions = json::array();
     for (const auto& func : bril.at("functions")) {
+        // optimize globally unused vars
+        json opt_func = func;
+        optimize_globally_unused_vars(opt_func);
+
         // gen basic blocks 
-        vector<vector<json>> blocks = gen_basic_blocks(func);
+        vector<vector<json>> blocks = gen_basic_blocks(opt_func);
 
         // eliminate dead blocks
         // vector<vector<json>> new_blocks = elim_dead_blocks(build_cfg(func.at("name").get<string>(), blocks), func.at("name").get<string>(), blocks);
 
         // lvn
-        // vector<vector<json>> lvn_blocks;
-        // for (vector<json> new_block : new_blocks) {
-        //     vector<json> lvn_block = lvn(new_block);
-        //     lvn_blocks.push_back(lvn_block);
-        // }
+        vector<vector<json>> lvn_blocks;
+        for (vector<json> block : blocks) {
+            vector<json> lvn_block = lvn(block);
+            lvn_blocks.push_back(lvn_block);
+        }
 
-        // // local tdce
+        // perform local tdce 
         vector<vector<json>> tdce_blocks;
-        for (const vector<json> lvn_block : blocks) {
-            vector<json> tdce_block = local_tdce(lvn_block);
+        for (const auto& block : lvn_blocks) {
+            vector<json> tdce_block = local_tdce(block);
             tdce_blocks.push_back(tdce_block);
         }
+
+        // // local tdce
+        // vector<vector<json>> tdce_blocks;
+        // for (const vector<json> lvn_block : blocks) {
+        //     vector<json> tdce_block = local_tdce(lvn_block);
+        //     tdce_blocks.push_back(tdce_block);
+        // }
 
         vector<vector<json>> final_blocks = tdce_blocks;
 
