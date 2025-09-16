@@ -1,0 +1,9 @@
+@main {
+  a: int = const 4;
+  jmp my_label;
+  b: int = const 2;
+.my_label:
+  c: int = const 1;
+  d: int = add a b;
+  print d;
+}

@@ -5,6 +5,7 @@
 #include <vector>
 #include <utility>
 #include <iterator>
+#include <unordered_set>
 #include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
@@ -83,6 +84,40 @@ static vector<pair<string, vector<string>>> build_cfg(const string& func_name,
     return items;
 }
 
+static vector<vector<json>> elim_dead_blocks(vector<pair<string, vector<string>>> cfg, const string& func_name, const vector<vector<json>>& basic_blocks) {
+    // create a set of all basic block's names to remove from
+    unordered_set<string> unused_blocks;
+    for (size_t i = 0; i < basic_blocks.size(); ++i) {
+        unused_blocks.insert(get_label(basic_blocks, func_name, i));
+    }
+
+    // iterate through cfg values. if a block is in the list of values, eliminate it from the set
+    for (const auto& [label, nxt] : cfg) {
+        for (const auto& n : nxt) {
+            unused_blocks.erase(n);
+        }
+    }
+
+    // guarantee that the entry block is not eliminated
+    if (!basic_blocks.empty()) {
+        unused_blocks.erase(get_label(basic_blocks, func_name, 0)); 
+    }
+
+    // return a new clone set of basic blocks with any of the blocks with names in the set remove
+    vector<vector<json>> new_blocks;
+    for (size_t i = 0; i < basic_blocks.size(); ++i) {
+        if (unused_blocks.find(get_label(basic_blocks, func_name, i)) == unused_blocks.end())
+            new_blocks.push_back(basic_blocks[i]);
+    }
+
+    // print what blocks we're eliminating
+    for (const auto& b : unused_blocks) {
+        cerr << "Eliminating dead block: " << b << "\n";
+    }
+    return new_blocks;
+}
+
+
 int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
@@ -92,22 +127,51 @@ int main() {
 
     json bril = json::parse(input);
 
-    // Collect cfg items across all functions
-    vector<pair<string, vector<string>>> cfg;
-    for (const auto& func : bril.at("functions")) {
-        auto blocks = gen_basic_blocks(func);
-        auto func_cfg = build_cfg(func.at("name").get<string>(), blocks);
-        cfg.insert(cfg.end(), func_cfg.begin(), func_cfg.end());
-    }
+    // cout << bril.dump() << "\n";
 
-    // Print as JSON array of [label, next_list]
-    json out = json::array();
-    for (const auto& [label, nxt] : cfg) {
-        json pair = json::array();
-        pair.push_back(label);
-        pair.push_back(nxt);
-        out.push_back(pair);
-    }
-    cout << out.dump() << "\n";
+    // Collect cfg items across all functions
+    // json dce_bril = json::array();
+    // for (const auto& func : bril.at("functions")) {
+    //     cout << func.dump() << "\n";
+    //     json dce_func = global_dce(func);
+    //     dce_bril.push_back(dce_func);
+    // }
+    // cout << dce_bril.dump() << "\n";
+
+    // Perform basic DCE 
+
+
+    // // Collect cfg items across all functions
+    // vector<pair<string, vector<string>>> cfg;
+    // for (const auto& func : bril.at("functions")) {
+    //     auto blocks = gen_basic_blocks(func);
+    //     auto func_cfg = build_cfg(func.at("name").get<string>(), blocks);
+    //     cfg.insert(cfg.end(), func_cfg.begin(), func_cfg.end());
+    // }
+
+    // // Print as JSON array of [label, next_list]
+    // json out = json::array();
+    // for (const auto& [label, nxt] : cfg) {
+    //     json pair = json::array();
+    //     pair.push_back(label);
+    //     pair.push_back(nxt);
+    //     out.push_back(pair);
+    // }
+    // cout << out.dump() << "\n";
+
+    // // Eliminate dead blocks
+    // vector<vector<json>> all_blocks;
+    // for (const auto& func : bril.at("functions")) {
+    //     auto blocks = gen_basic_blocks(func);
+    //     auto func_cfg = build_cfg(func.at("name").get<string>(), blocks);
+    //     auto new_blocks = elim_dead_blocks(func_cfg, func.at("name").get<string>(), blocks);
+
+    //     // print the new blocks to stdout 
+    //     for (const auto& block : new_blocks) {
+    //         for (const auto& instr : block) {
+    //             cout << instr.dump() << "\n";
+    //         }
+    //     }
+    // }
     return 0;
 }
