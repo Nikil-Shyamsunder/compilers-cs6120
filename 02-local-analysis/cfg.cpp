@@ -118,6 +118,34 @@ static vector<vector<json>> elim_dead_blocks(vector<pair<string, vector<string>>
 }
 
 
+static json global_dce(const json& function) {
+    // TODO: this should be done on basic blocks and doesn't handle reassign
+    unordered_set<string> used_vars;
+
+    // First pass: collect used variables
+    for (const auto& instr : function.at("instrs")) {
+        if (instr.contains("args")){
+            for (const auto& arg : instr.at("args")) {
+                used_vars.insert(arg.get<string>());
+            }
+        }
+    }
+
+    // Second pass: remove assignments to unused variables
+    json new_function = function;
+    new_function["instrs"] = json::array();
+    for (const auto& instr : function.at("instrs")) {
+        if (instr.contains("op") && instr.at("op").get<string>() == "const" && (used_vars.find(instr.at("dest").get<string>()) == used_vars.end())){
+            // skip assignments to unused variables
+        } else {
+            new_function["instrs"].push_back(instr);
+        }
+    }
+
+    return new_function;
+}
+
+
 int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
@@ -130,13 +158,14 @@ int main() {
     // cout << bril.dump() << "\n";
 
     // Collect cfg items across all functions
-    // json dce_bril = json::array();
-    // for (const auto& func : bril.at("functions")) {
-    //     cout << func.dump() << "\n";
-    //     json dce_func = global_dce(func);
-    //     dce_bril.push_back(dce_func);
-    // }
-    // cout << dce_bril.dump() << "\n";
+    json dce_functions = json::array();
+    for (const auto& func : bril.at("functions")) {
+        json dce_func = global_dce(func);
+        dce_functions.push_back(dce_func);
+    }
+
+    bril["functions"] = dce_functions;
+    cout << bril.dump() << "\n";
 
     // Perform basic DCE 
 
