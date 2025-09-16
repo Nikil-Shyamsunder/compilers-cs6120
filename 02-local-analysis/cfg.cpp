@@ -217,7 +217,7 @@ struct value {
     }
 };
 
-static vector<json> lvn(const vector<json>& block){
+static vector<json> lvn(vector<json>& block){
     vector<json> new_block;
     map<value, pair<int, string>> table; // value -> (value number, canonical var name)
     map<string, int> var2num;
@@ -247,6 +247,36 @@ static vector<json> lvn(const vector<json>& block){
         } else {
             int fresh_value_num = table.size() + 1;
             string dest = instr["dest"];
+
+            // if value will be overwritten later, create a fresh var name
+            bool will_be_overwritten = false;
+            // probably can pre-calculate this in an initial pass
+            for (int j = i + 1; j < block.size(); ++j) {
+                if (block[j].contains("dest") && block[j]["dest"] == dest) {
+                    will_be_overwritten = true;
+                    break;
+                }
+            }
+
+            if (will_be_overwritten) {
+                string new_dest = dest  + to_string(fresh_value_num);
+                
+                // replace every occurence of dest in future instructions before reassignment with new_dest
+                for (int j = i + 1; j < block.size(); ++j) {
+                    if (block[j].contains("args")) {
+                        json new_args = json::array();
+                        for (auto& arg : block[j]["args"]) {
+                            new_args.push_back(arg.get<string>() == dest ? json(new_dest) : arg);
+                        }
+                        block[j]["args"] = new_args;
+                    } else if (block[j].contains("dest") && block[j]["dest"] == dest) {
+                        break;
+                    } 
+                }
+
+                dest = new_dest;
+                instr["dest"] = dest;
+            }
             
             // TODO: instr will be overwritten later case
             table.insert({v, std::make_pair(fresh_value_num, dest)});
@@ -270,7 +300,13 @@ static vector<json> lvn(const vector<json>& block){
         }   
         
         // FIXME: inefficient
+        // update or insert var2num mapping
         var2num[instr["dest"]] = table.find(v)->second.first;
+
+        // for (const auto& pair : var2num) {
+        //     std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
+        // }
+        // cout << endl;
     }
 
     return new_block;
@@ -303,8 +339,6 @@ int main() {
 
     json bril = json::parse(input);
 
-    // cout << bril.dump() << "\n";
-
     // Collect cfg items across all functions
     json dce_functions = json::array();
     for (const auto& func : bril.at("functions")) {
@@ -316,7 +350,7 @@ int main() {
 
         // lvn
         vector<vector<json>> lvn_blocks;
-        for (const vector<json> new_block : new_blocks) {
+        for (vector<json> new_block : new_blocks) {
             vector<json> lvn_block = lvn(new_block);
             lvn_blocks.push_back(lvn_block);
         }
