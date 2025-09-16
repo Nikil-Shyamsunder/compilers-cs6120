@@ -6,6 +6,7 @@
 #include <utility>
 #include <iterator>
 #include <unordered_set>
+#include <map>
 #include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
@@ -145,7 +146,7 @@ static vector<vector<json>> elim_dead_blocks(vector<pair<string, vector<string>>
 //     return new_function;
 // }
 
-static vector<json> local_dce(const vector<json>& block) {
+static vector<json> local_tdce(const vector<json>& block) {
     int numDeleted = 1;
     vector<json> new_block = block;
     vector<json> curr_block;
@@ -167,7 +168,7 @@ static vector<json> local_dce(const vector<json>& block) {
             }
             
             // if we have an assignment stmt
-            if (stmt.contains("op") && stmt.at("op").get<string>() == "const") {
+            if (stmt.contains("dest")) {
                 if (curr_used.find(stmt.at("dest").get<string>()) != curr_used.end()) {
                     // if this is the newest assignment of the var
                     curr_used.erase(stmt.at("dest").get<string>());
@@ -183,8 +184,114 @@ static vector<json> local_dce(const vector<json>& block) {
     // cout << new_block << "\n";
     // convergence achieved, return new_block
     return new_block;
-
 }
+
+// triple of (op, val1, val2) or (const, val)
+struct value {
+    string op;
+    vector<string> vals;
+
+    bool operator==(const value& other) const {
+        return op == other.op && vals == other.vals;
+    }
+
+    // To use map
+    bool operator<(const value& other) const {
+        if (op != other.op) return op < other.op;
+        return vals < other.vals;
+    }
+
+    // construct a value from a json instruction
+    static value from_json(json j) {
+        value v;
+        v.op = j.at("op").get<string>();
+        if (j.contains("args")) {
+            for (const auto& arg : j.at("args")) {
+                v.vals.push_back(arg.get<string>());
+            }
+        } else if (j.contains("value")) {
+            v.vals.push_back(std::to_string(j.at("value").get<int>()));
+        }
+        return v;
+        
+    }
+};
+
+static vector<json> lvn(const vector<json>& block){
+    vector<json> new_block;
+    map<value, pair<int, string>> table; // value -> (value number, canonical var name)
+    map<string, int> var2num;
+
+    for (int i = 0; i < block.size(); ++i) {
+        json instr = block[i];
+        // only consider instructions that compute a value (have a destination)
+        if (!instr.contains("dest")) {
+            new_block.push_back(instr);
+            continue;
+        }
+        value v = value::from_json(instr);
+        
+        // TODO: Check if its a thing that we need to actually do this on (stmt with a dest)
+        if (table.find(v) != table.end()) {
+            // value has been computed before; reuse it
+            pair<int, string> entry = table.at(table.find(v)->first);
+            string canonical_var = entry.second;
+            string dest_var = instr["dest"];
+            json new_instr = {
+                {"args", json::array({canonical_var})},
+                {"dest", dest_var},
+                {"op", "id"},
+                {"type", instr["type"]}
+            };
+            new_block.push_back(new_instr);
+        } else {
+            int fresh_value_num = table.size() + 1;
+            string dest = instr["dest"];
+            
+            // TODO: instr will be overwritten later case
+            table.insert({v, std::make_pair(fresh_value_num, dest)});
+
+            // replace instruction args with canonical var names
+            vector<string> new_args;
+            for (string arg : instr["args"]) {
+                int vn = var2num.at(arg);
+                // iterate until you find the vn in the pair within table
+                // FIXME: not efficient DS
+                for (const auto& [val, entry] : table) {
+                    if (entry.first == vn) {
+                        new_args.push_back(entry.second);
+                        break;
+                    }
+                }
+            }
+
+            instr["args"] = new_args;
+            new_block.push_back(instr);
+        }   
+        
+        // FIXME: inefficient
+        var2num[instr["dest"]] = table.find(v)->second.first;
+    }
+
+    return new_block;
+}
+//     else:
+//         # A newly computed value.
+//         num = fresh value number
+
+//         dest = instr.dest
+//         if instr will be overwritten later:
+//              dest = fresh variable name
+//              instr.dest = dest
+//         else:
+//              dest = instr.dest
+
+//         table[value] = num, dest
+
+//         for a in instr.args:
+//             replace a with table[var2num[a]].var
+
+//     var2num[instr.dest] = num
 
 
 int main() {
@@ -207,18 +314,26 @@ int main() {
         // eliminate dead blocks
         vector<vector<json>> new_blocks = elim_dead_blocks(build_cfg(func.at("name").get<string>(), blocks), func.at("name").get<string>(), blocks);
 
-        // local dce
-        vector<vector<json>> dce_blocks;
+        // lvn
+        vector<vector<json>> lvn_blocks;
         for (const vector<json> new_block : new_blocks) {
-            vector<json> dce_block = local_dce(new_block);
-            dce_blocks.push_back(dce_block);
+            vector<json> lvn_block = lvn(new_block);
+            lvn_blocks.push_back(lvn_block);
         }
 
-        // flatten dce_blocks vectors into instruction list
-        // replace function instrs with dce instrs
+        // local tdce
+        vector<vector<json>> tdce_blocks;
+        for (const vector<json> lvn_block : lvn_blocks) {
+            vector<json> tdce_block = local_tdce(lvn_block);
+            tdce_blocks.push_back(tdce_block);
+        }
+
+        vector<vector<json>> final_blocks = tdce_blocks;
+
+        // flatten blocks into instruction list, replace function instrs 
         json new_func = func;
         new_func["instrs"] = json::array();
-        for (const auto& block : dce_blocks) {
+        for (const auto& block : final_blocks) {
             for (const auto& instr : block) {
                 new_func["instrs"].push_back(instr);
             }
