@@ -1,9 +1,9 @@
 @main {
   a: int = const 4;
-  jmp my_label;
+  jmp .my_label;
   b: int = const 2;
 .my_label:
   c: int = const 1;
-  d: int = add a b;
+  d: int = add a c;
   print d;
 }

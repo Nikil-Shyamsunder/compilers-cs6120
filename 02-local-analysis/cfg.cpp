@@ -111,10 +111,6 @@ static vector<vector<json>> elim_dead_blocks(vector<pair<string, vector<string>>
             new_blocks.push_back(basic_blocks[i]);
     }
 
-    // print what blocks we're eliminating
-    for (const auto& b : unused_blocks) {
-        cerr << "Eliminating dead block: " << b << "\n";
-    }
     return new_blocks;
 }
 
@@ -284,14 +280,23 @@ static vector<json> lvn(vector<json>& block){
             // replace instruction args with canonical var names
             vector<string> new_args;
             for (string arg : instr["args"]) {
-                int vn = var2num.at(arg);
-                // iterate until you find the vn in the pair within table
-                // FIXME: not efficient DS
-                for (const auto& [val, entry] : table) {
-                    if (entry.first == vn) {
-                        new_args.push_back(entry.second);
-                        break;
+                if (var2num.find(arg) != var2num.end()) {
+                    int vn = var2num.at(arg);
+                    // iterate until you find the vn in the pair within table
+                    // FIXME: not efficient DS
+                    bool found = false;
+                    for (const auto& [val, entry] : table) {
+                        if (entry.first == vn) {
+                            new_args.push_back(entry.second);
+                            found = true;
+                            break;
+                        }
                     }
+                    if (!found) {
+                        new_args.push_back(arg);
+                    }
+                } else {
+                    new_args.push_back(arg);
                 }
             }
 
@@ -346,18 +351,18 @@ int main() {
         vector<vector<json>> blocks = gen_basic_blocks(func);
 
         // eliminate dead blocks
-        vector<vector<json>> new_blocks = elim_dead_blocks(build_cfg(func.at("name").get<string>(), blocks), func.at("name").get<string>(), blocks);
+        // vector<vector<json>> new_blocks = elim_dead_blocks(build_cfg(func.at("name").get<string>(), blocks), func.at("name").get<string>(), blocks);
 
         // lvn
-        vector<vector<json>> lvn_blocks;
-        for (vector<json> new_block : new_blocks) {
-            vector<json> lvn_block = lvn(new_block);
-            lvn_blocks.push_back(lvn_block);
-        }
+        // vector<vector<json>> lvn_blocks;
+        // for (vector<json> new_block : new_blocks) {
+        //     vector<json> lvn_block = lvn(new_block);
+        //     lvn_blocks.push_back(lvn_block);
+        // }
 
-        // local tdce
+        // // local tdce
         vector<vector<json>> tdce_blocks;
-        for (const vector<json> lvn_block : lvn_blocks) {
+        for (const vector<json> lvn_block : blocks) {
             vector<json> tdce_block = local_tdce(lvn_block);
             tdce_blocks.push_back(tdce_block);
         }
@@ -384,7 +389,7 @@ int main() {
     // // Collect cfg items across all functions
     // vector<pair<string, vector<string>>> cfg;
     // for (const auto& func : bril.at("functions")) {
-    //     auto blocks = gen_basic_blocks(func);
+    //     auto blocks = gen_basic_blocks(func);s
     //     auto func_cfg = build_cfg(func.at("name").get<string>(), blocks);
     //     cfg.insert(cfg.end(), func_cfg.begin(), func_cfg.end());
     // }
