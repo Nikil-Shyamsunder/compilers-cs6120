@@ -1,1 +1,0 @@
-{"functions":[{"instrs":[{"dest":"a","op":"const","type":"int","value":4},{"labels":["my_label"],"op":"jmp"},{"label":"my_label"},{"dest":"c","op":"const","type":"int","value":1},{"args":["a","c"],"dest":"d","op":"add","type":"int"},{"args":["d"],"op":"print"}],"name":"main"}]}

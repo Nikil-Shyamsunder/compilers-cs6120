@@ -10,6 +10,7 @@ pipeline = [
 [runs.opt]
 pipeline = [
     "bril2json",
-    "../cfg",
+    "../lvn",
+    "../tdce",
     "brili -p {args}",
 ]
