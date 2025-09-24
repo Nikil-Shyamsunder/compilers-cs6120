@@ -16,6 +16,13 @@ std::string get_label(const std::vector<std::vector<json>>& basic_blocks, const 
 
 void replace_func_instrs(json& func, const std::vector<std::vector<json>>& blocks);
 
+struct cfg_info {
+    std::map<std::string, std::vector<std::string>> successors;
+    std::map<std::string, std::vector<std::string>> predecessors;
+};
+
+cfg_info build_cfg(const std::string& func_name, const std::vector<std::vector<json>>& basic_blocks);
+
 // Value struct for LVN
 struct value {
     std::string op;

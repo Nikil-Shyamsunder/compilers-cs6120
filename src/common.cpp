@@ -39,6 +39,54 @@ std::vector<std::vector<json>> gen_basic_blocks(const json& function) {
     return basic_blocks;
 }
 
+cfg_info build_cfg(const std::string& func_name, const std::vector<std::vector<json>>& basic_blocks) {
+    cfg_info cfg;
+    
+    // Initialize all labels in both maps
+    for (size_t i = 0; i < basic_blocks.size(); ++i) {
+        std::string label = get_label(basic_blocks, func_name, i);
+        cfg.successors[label] = std::vector<std::string>();
+        cfg.predecessors[label] = std::vector<std::string>();
+    }
+    
+    for (size_t i = 0; i < basic_blocks.size(); ++i) {
+        const auto& basic_block = basic_blocks[i];
+        std::string label = get_label(basic_blocks, func_name, i);
+        
+        std::vector<std::string> next;
+        
+        if (basic_block.empty() || !basic_block.back().contains("op")) {
+            // successors are just the next block if it exists
+            if (i + 1 < basic_blocks.size()) {
+                next.push_back(get_label(basic_blocks, func_name, i + 1));
+            }
+        } else {
+            std::string op = basic_block.back().at("op").get<std::string>();
+            
+            if (op == "br" || op == "jmp") { // branch or jump
+                if (basic_block.back().contains("labels") && basic_block.back()["labels"].is_array()) {
+                    for (const auto& target_label : basic_block.back()["labels"]) {
+                        next.push_back(target_label.get<std::string>());
+                    }
+                }
+            } else if (op == "ret") { // next should stay empty for return instructions
+            } else if (i + 1 < basic_blocks.size()) { // just go to the next block
+                next.push_back(get_label(basic_blocks, func_name, i + 1));
+            }
+        }
+        
+        cfg.successors[label] = next;
+        
+        // update predecessors of all successors adding this block
+        for (const auto& successor : next) {
+            cfg.predecessors[successor].push_back(label);
+        }
+    }
+    
+    return cfg;
+}
+
+
 std::string get_label(const std::vector<std::vector<json>>& basic_blocks, const std::string& func, size_t idx) {
     const auto& block = basic_blocks.at(idx);
     if (!block.empty() && block.front().contains("label")) {
