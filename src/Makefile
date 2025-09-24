@@ -8,10 +8,10 @@ HDR_COMMON = common.hpp
 all: lvn tdce
 
 lvn: lvn.cpp $(SRC_COMMON) $(HDR_COMMON)
-	$(CXX) $(CXXFLAGS) $(INC) lvn.cpp $(SRC_COMMON) -o lvn
+	$(CXX) $(CXXFLAGS) $(INC) lvn.cpp $(SRC_COMMON) -o build/lvn
 
 tdce: tdce.cpp $(SRC_COMMON) $(HDR_COMMON)
-	$(CXX) $(CXXFLAGS) $(INC) tdce.cpp $(SRC_COMMON) -o tdce
+	$(CXX) $(CXXFLAGS) $(INC) tdce.cpp $(SRC_COMMON) -o build/tdce
 
 clean:
-	rm -f lvn tdce
+	rm -f build/lvn build/tdce
