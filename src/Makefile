@@ -5,7 +5,7 @@ INC      ?= -I$(shell brew --prefix)/include
 SRC_COMMON = common.cpp
 HDR_COMMON = common.hpp
 
-all: lvn tdce
+all: lvn tdce reaching_definitions
 
 lvn: lvn.cpp $(SRC_COMMON) $(HDR_COMMON)
 	$(CXX) $(CXXFLAGS) $(INC) lvn.cpp $(SRC_COMMON) -o build/lvn
@@ -13,5 +13,8 @@ lvn: lvn.cpp $(SRC_COMMON) $(HDR_COMMON)
 tdce: tdce.cpp $(SRC_COMMON) $(HDR_COMMON)
 	$(CXX) $(CXXFLAGS) $(INC) tdce.cpp $(SRC_COMMON) -o build/tdce
 
+reaching_definitions: reaching_definitions.cpp $(SRC_COMMON) $(HDR_COMMON)
+	$(CXX) $(CXXFLAGS) $(INC) reaching_definitions.cpp $(SRC_COMMON) -o build/reaching_definitions
+
 clean:
-	rm -f build/lvn build/tdce
+	rm -f build/*
