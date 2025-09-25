@@ -1,0 +1,25 @@
+Block c_le:
+  t defined at {"args":["t","c"],"dest":"t","op":"add","type":"int"}
+  one defined at {"dest":"one","op":"const","type":"int","value":1}
+  cond_c defined at {"args":["c","n"],"dest":"cond_c","op":"le","type":"bool"}
+  c defined at {"args":["c","one"],"dest":"c","op":"add","type":"int"}
+Block c_gt:
+  t defined at {"args":["t","c"],"dest":"t","op":"add","type":"int"}
+  cond_c defined at {"args":["c","n"],"dest":"cond_c","op":"le","type":"bool"}
+  c defined at {"dest":"c","op":"const","type":"int","value":1}
+  one defined at {"dest":"one","op":"const","type":"int","value":1}
+  c defined at {"args":["c","one"],"dest":"c","op":"add","type":"int"}
+  t defined at {"dest":"t","op":"const","type":"int","value":0}
+Block c:
+  c defined at {"args":["c","one"],"dest":"c","op":"add","type":"int"}
+  t defined at {"dest":"t","op":"const","type":"int","value":0}
+  c defined at {"dest":"c","op":"const","type":"int","value":1}
+  one defined at {"dest":"one","op":"const","type":"int","value":1}
+  t defined at {"args":["t","c"],"dest":"t","op":"add","type":"int"}
+  cond_c defined at {"args":["c","n"],"dest":"cond_c","op":"le","type":"bool"}
+Block tri-block0:
+  one defined at {"dest":"one","op":"const","type":"int","value":1}
+  c defined at {"dest":"c","op":"const","type":"int","value":1}
+  t defined at {"dest":"t","op":"const","type":"int","value":0}
+Block main-block0:
+  tmp defined at {"args":["n"],"dest":"tmp","funcs":["tri"],"op":"call","type":"int"}

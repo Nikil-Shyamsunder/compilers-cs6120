@@ -1,0 +1,24 @@
+Block right:
+  b defined at {"dest":"b","op":"const","type":"int","value":42}
+  cond defined at {"dest":"cond","op":"const","type":"bool","value":true}
+  a defined at {"dest":"a","op":"const","type":"int","value":2}
+  c defined at {"dest":"c","op":"const","type":"int","value":10}
+Block end:
+  c defined at {"dest":"c","op":"const","type":"int","value":10}
+  a defined at {"dest":"a","op":"const","type":"int","value":2}
+  b defined at {"dest":"b","op":"const","type":"int","value":42}
+  a defined at {"dest":"a","op":"const","type":"int","value":47}
+  b defined at {"dest":"b","op":"const","type":"int","value":1}
+  cond defined at {"dest":"cond","op":"const","type":"bool","value":true}
+  d defined at {"args":["a","c"],"dest":"d","op":"sub","type":"int"}
+  c defined at {"dest":"c","op":"const","type":"int","value":5}
+Block left:
+  c defined at {"dest":"c","op":"const","type":"int","value":5}
+  cond defined at {"dest":"cond","op":"const","type":"bool","value":true}
+  b defined at {"dest":"b","op":"const","type":"int","value":1}
+  a defined at {"dest":"a","op":"const","type":"int","value":47}
+Block main-block0:
+  a defined at {"dest":"a","op":"const","type":"int","value":47}
+  c defined at {"dest":"c","op":"const","type":"int","value":66}
+  b defined at {"dest":"b","op":"const","type":"int","value":42}
+  cond defined at {"dest":"cond","op":"const","type":"bool","value":true}

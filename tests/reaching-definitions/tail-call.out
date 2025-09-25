@@ -1,0 +1,13 @@
+Block inc_depth:
+  cond defined at {"args":["depth","zero"],"dest":"cond","op":"eq","type":"bool"}
+  one defined at {"dest":"one","op":"const","type":"int","value":1}
+  zero defined at {"dest":"zero","op":"const","type":"int","value":0}
+  new_depth defined at {"args":["depth","one"],"dest":"new_depth","op":"sub","type":"int"}
+Block end:
+  new_depth defined at {"args":["depth","one"],"dest":"new_depth","op":"sub","type":"int"}
+  cond defined at {"args":["depth","zero"],"dest":"cond","op":"eq","type":"bool"}
+  zero defined at {"dest":"zero","op":"const","type":"int","value":0}
+  one defined at {"dest":"one","op":"const","type":"int","value":1}
+Block main-block0:
+  zero defined at {"dest":"zero","op":"const","type":"int","value":0}
+  cond defined at {"args":["depth","zero"],"dest":"cond","op":"eq","type":"bool"}
