@@ -8,6 +8,7 @@ using namespace std;
 // while dom is still changing:
 //     for vertex in CFG except entry:
 //         dom[vertex] = {vertex} ∪ ⋂(dom[p] for p in vertex.preds}
+// TODO: No optimization for reverse post-order CFG traversal
 unordered_map<string, unordered_set<string>> dominators(string func_name, vector<vector<json>> blocks) {
     unordered_map<string, unordered_set<string>> dom;
     cfg_info cfg = build_cfg(func_name, blocks);
@@ -67,12 +68,38 @@ unordered_map<string, unordered_set<string>> dominators(string func_name, vector
     return dom;
 }
 
+
 // dominator tree
 // strategy: for each block B, iterate through all dominators and find the one that doesn't dominate any other dominator of B 
 unordered_map<string, unordered_set<string>> dominator_tree(unordered_map<string, unordered_set<string>> dominators) {
-    
-}
+    unordered_map<string, unordered_set<string>> dom_tree;
+    for (const auto& [block, doms] : dominators) {
+        // if (doms.size() <= 1) continue; // skip entry block or any block with no dominators (tree can't have self loops)
 
+        // find immediate dominator
+        string idom;
+        for (const auto& candidate : doms) {
+            // skip self - no self loops. this should cover the case of entry block or block whose only dominator is itself
+            if (candidate == block) continue; 
+            bool is_idom = true;
+            for (const auto& other : doms) {
+                if (other == block || other == candidate) continue;
+                if (dominators[other].count(candidate)) {
+                    is_idom = false;
+                    break;
+                }
+            }
+            if (is_idom) {
+                idom = candidate;
+                break;
+            }
+        }
+        if (!idom.empty()) {
+            dom_tree[idom].insert(block);
+        }
+    }
+    return dom_tree;
+}
 
 
 int main() {
