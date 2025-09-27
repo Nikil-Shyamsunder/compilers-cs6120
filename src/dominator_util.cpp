@@ -71,6 +71,7 @@ unordered_map<string, unordered_set<string>> dominators(string func_name, vector
 
 // dominator tree
 // strategy: for each block B, iterate through all dominators and find the one that doesn't dominate any other dominator of B 
+// TODO: is there a more efficient impl
 unordered_map<string, unordered_set<string>> dominator_tree(unordered_map<string, unordered_set<string>> dominators) {
     unordered_map<string, unordered_set<string>> dom_tree;
     for (const auto& [block, doms] : dominators) {
@@ -99,6 +100,41 @@ unordered_map<string, unordered_set<string>> dominator_tree(unordered_map<string
         }
     }
     return dom_tree;
+}
+
+
+// from ECE 6775 slides
+// q in dominance frontier of p if:
+// (1) p does NOT strictly dominate q <-- get this from the dominators map
+// (2) p dominates some predecessor(s) of q <-- just check predecessors of q
+// If above two conditions hold, qÎDF(p)
+
+unordered_map<string, unordered_set<string>> dominance_frontier(unordered_map<string, unordered_set<string>> dominators, cfg_info cfg) {
+    unordered_map<string, unordered_set<string>> dom_frontier;
+
+    for (const auto& [b, preds] : cfg.predecessors) {
+        for (const auto& p : preds) {
+            // move on if p doesn't strictly dominate b
+            if (dominators[b].count(p) && dominators[b].size() > 1) { 
+                continue;
+            }
+
+            // check if p dominates some predecessor(s) of b
+            bool p_dominates_some_pred = false;
+            for (const auto& pred_of_b : preds) {
+                if (pred_of_b == p) continue;
+                if (dominators[pred_of_b].count(p)) {
+                    p_dominates_some_pred = true;
+                    break;
+                }
+            }
+            if (p_dominates_some_pred) {
+                dom_frontier[p].insert(b);
+            }
+        }
+    }
+
+    return dom_frontier;
 }
 
 
