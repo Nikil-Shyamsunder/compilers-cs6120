@@ -14,11 +14,12 @@ unordered_map<string, unordered_set<string>> dominators(string func_name, vector
     cfg_info cfg = build_cfg(func_name, blocks);
 
     // add dummy "entry"-labeled node to cfg, with back edge to first block in blocks
-    string entry = "entry";
-    string first_block = get_label(blocks, func_name, 0);
-    cfg.predecessors[first_block].push_back(entry);
-    cfg.successors[entry] = {first_block};
-    cfg.predecessors[entry] = {};
+    // this is now done in basic block construction
+    // string entry = "entry";
+    // string first_block = get_label(blocks, func_name, 0);
+    // cfg.predecessors[first_block].push_back(entry);
+    // cfg.successors[entry] = {first_block};
+    // cfg.predecessors[entry] = {};
 
     // get a list of all blocks to help with initialization
     unordered_set<string> all_blocks;
@@ -32,7 +33,7 @@ unordered_map<string, unordered_set<string>> dominators(string func_name, vector
         dom[label] = all_blocks; // start with everything
     }
 
-    string entry = get_label(blocks, func_name, 0);
+    auto entry = get_label(blocks, func_name, 0);
     dom[entry] = {entry};
 
     bool changed = true;
@@ -105,36 +106,84 @@ unordered_map<string, unordered_set<string>> dominator_tree(unordered_map<string
 
 // from ECE 6775 slides
 // q in dominance frontier of p if:
-// (1) p does NOT strictly dominate q <-- get this from the dominators map
-// (2) p dominates some predecessor(s) of q <-- just check predecessors of q
+// (1) p does NOT strictly dominate q 
+// (2) p dominates some predecessor(s) of q
 // If above two conditions hold, qÎDF(p)
 
-unordered_map<string, unordered_set<string>> dominance_frontier(unordered_map<string, unordered_set<string>> dominators, cfg_info cfg) {
+unordered_map<string, unordered_set<string>> dominance_frontier(unordered_map<string, unordered_set<string>> dominators, unordered_map<string, unordered_set<string>> dom_tree, cfg_info cfg) {
+    // init
     unordered_map<string, unordered_set<string>> dom_frontier;
+    for (const auto& [node, _] : dominators) {
+        dom_frontier[node] = {};
+    }
+
+    // reverse the dom tree for child -> parent lookups
+    unordered_map<string, string> idom;
+    for (const auto& [parent, children] : dom_tree) {
+        for (const auto& child : children) {
+            idom[child] = parent;
+        }
+    }
 
     for (const auto& [b, preds] : cfg.predecessors) {
+        if (preds.size() < 2) continue;
         for (const auto& p : preds) {
-            // move on if p doesn't strictly dominate b
-            if (dominators[b].count(p) && dominators[b].size() > 1) { 
-                continue;
-            }
-
-            // check if p dominates some predecessor(s) of b
-            bool p_dominates_some_pred = false;
-            for (const auto& pred_of_b : preds) {
-                if (pred_of_b == p) continue;
-                if (dominators[pred_of_b].count(p)) {
-                    p_dominates_some_pred = true;
-                    break;
-                }
-            }
-            if (p_dominates_some_pred) {
-                dom_frontier[p].insert(b);
+            string runner = p;
+            while (!runner.empty() && idom.find(b) != idom.end() && runner != idom[b]) {
+                dom_frontier[runner].insert(b);
+                if (idom.find(runner) == idom.end()) break;
+                runner = idom[runner];
             }
         }
     }
 
     return dom_frontier;
+}
+
+// enumerate all paths from entry to target
+// returns a vector of paths, each path is a vector<string> of block labels
+void dfs_paths(const string& node,
+               const string& target,
+               map<string, vector<string>>& succ,
+               vector<string>& path,
+               vector<vector<string>>& all_paths,
+               unordered_set<string>& visited) {
+    if (visited.count(node)) return;
+
+    path.push_back(node);
+    if (node == target) {
+        all_paths.push_back(path);
+        path.pop_back();
+        return;
+    }
+
+    visited.insert(node);
+    for (const auto& nxt : succ[node]) {
+        dfs_paths(nxt, target, succ, path, all_paths, visited);
+    }
+    visited.erase(node);
+
+    path.pop_back();
+}
+
+// Naive check: does A dominate B?
+bool dominates_naive(const string& A, const string& B,
+                     const string& entry,
+                     map<string, vector<string>>& succ) {
+    if (A == B) return true;
+    vector<vector<string>> all_paths;
+    vector<string> path;
+    unordered_set<string> visited;
+    dfs_paths(entry, B, succ, path, all_paths, visited);
+
+    if (all_paths.empty()) return false; // unreachable
+
+    for (const auto& p : all_paths) {
+        if (find(p.begin(), p.end(), A) == p.end()) {
+            return false; // found a path to B that avoids A
+        }
+    }
+    return true;
 }
 
 
@@ -148,6 +197,7 @@ int main() {
     json out_funcs = json::array();
     for (const auto& func : bril.at("functions")) {
         auto blocks = gen_basic_blocks(func);
+        blocks.insert(blocks.begin(), { { { "label", "entry" } } }); // add entry block
 
         // cout << "Function: " << func["name"] << "\n";
         auto reaching_defs = dominators(func["name"], blocks); 
@@ -159,5 +209,46 @@ int main() {
                 cout << "  " << dom << "\n";
             }
         }
+        cout << endl;
+
+        // print out dom tree
+        auto dom_tree = dominator_tree(reaching_defs);
+        cout << "Dominator Tree:\n";
+        for (const auto& [parent, children] : dom_tree) {
+            cout << "  " << parent << " -> ";
+            for (const auto& child : children) {
+                cout << child << " ";
+            }
+            cout << "\n";
+        }
+        cout << endl;
+        
+        // print out dom frontier
+        auto cfg = build_cfg(func["name"], blocks);
+        auto dom_frontier = dominance_frontier(reaching_defs, dom_tree, cfg);
+        cout << "Dominance Frontier:\n";
+        for (const auto& [block, frontier] : dom_frontier) {
+            cout << "  " << block << " -> ";
+            for (const auto& f : frontier) {
+                cout << f << " ";
+            }
+            cout << endl;
+        }        
+
+        // check correctness by naive path enumeration
+        cout << "Naive Dom Check:\n";
+        string entry = get_label(blocks, func["name"], 0);
+        for (const auto& [B, doms] : reaching_defs) {
+            for (const auto& A : doms) {
+                bool ok = dominates_naive(A, B, entry, cfg.successors);
+                if (!ok) {
+                    cout << "  ERROR: " << A << " should not dominate " << B << "\n";
+                }
+                else {
+                    cout << ".";
+                }
+            }
+        }
+        cout << "Dom check complete\n\n";
     }
 }
