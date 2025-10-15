@@ -211,30 +211,42 @@ map<string, unordered_set<string>> compute_get_targets(
 
     for (const auto &[var, def_blocks] : definitions)
     {
-        vector<string> def_list(def_blocks.begin(), def_blocks.end());
-        for (const auto &def_block : def_blocks)
-        {
-            auto it = frontiers.find(def_block);
-            if (it == frontiers.end()) continue;
+        std::vector<string> worklist(def_blocks.begin(), def_blocks.end());
+        unordered_set<string> defsites(def_blocks.begin(), def_blocks.end());
 
-            for (const auto &b : it->second)
+        while (!worklist.empty())
+        {
+            string b = worklist.back();
+            worklist.pop_back();
+
+            auto it = frontiers.find(b);
+            if (it == frontiers.end())
+                continue;
+
+            for (const auto &d : it->second)
             {
-                if (!need_get[b].count(var))
+                if (!need_get[d].count(var))
                 {
-                    need_get[b].insert(var);
-                    if (find(def_list.begin(), def_list.end(), b) == def_list.end())
-                        def_list.push_back(b);
+                    need_get[d].insert(var);
+
+                    if (!defsites.count(d))
+                    {
+                        defsites.insert(d);
+                        worklist.push_back(d);
+                    }
                 }
             }
         }
     }
+
     return need_get;
 }
 
-struct RenameInfo {
+struct RenameInfo
+{
     map<string, vector<tuple<string, string, string>>> sets; // block -> [(succ, old, val)]
-    map<string, map<string, string>> get_targets; // block -> {old : new}
-    map<string, string> initial_values; // old -> init name
+    map<string, map<string, string>> get_targets;            // block -> {old : new}
+    map<string, string> initial_values;                      // old -> init name
 };
 
 RenameInfo perform_ssa_renaming(
@@ -258,8 +270,10 @@ RenameInfo perform_ssa_renaming(
 
         // OLD: if (auto it = need_get.find(b); it != need_get.end())
         auto it = need_get.find(b);
-        if (it != need_get.end()) {
-            for (const auto &v : it->second) dest_map[v] = "";
+        if (it != need_get.end())
+        {
+            for (const auto &v : it->second)
+                dest_map[v] = "";
         }
     }
 
@@ -270,14 +284,17 @@ RenameInfo perform_ssa_renaming(
     map<string, string> inits;
     unordered_map<string, int> version_ctr;
 
-    auto new_name = [&](const string &v) {
+    auto new_name = [&](const string &v)
+    {
         string n = v + "." + to_string(version_ctr[v]++);
         name_stack[v].insert(name_stack[v].begin(), n);
         return n;
     };
 
-    auto current_name = [&](const string &v) -> string {
-        if (!name_stack[v].empty()) return name_stack[v][0];
+    auto current_name = [&](const string &v) -> string
+    {
+        if (!name_stack[v].empty())
+            return name_stack[v][0];
         string init = v + ".init";
         inits[v] = init;
         return init;
@@ -290,7 +307,8 @@ RenameInfo perform_ssa_renaming(
 
         // OLD: if (auto it = need_get.find(bname); it != need_get.end())
         auto it_need = need_get.find(bname);
-        if (it_need != need_get.end()) {
+        if (it_need != need_get.end())
+        {
             for (const auto &v : it_need->second)
                 get_target_map[bname][v] = new_name(v);
         }
@@ -301,7 +319,8 @@ RenameInfo perform_ssa_renaming(
             if (inst.contains("args"))
             {
                 for (auto &a : inst["args"])
-                    if (a.is_string()) a = current_name(a.get<string>());
+                    if (a.is_string())
+                        a = current_name(a.get<string>());
             }
             if (inst.contains("dest"))
                 inst["dest"] = new_name(inst["dest"].get<string>());
@@ -316,7 +335,8 @@ RenameInfo perform_ssa_renaming(
             {
                 // OLD: if (auto jt = need_get.find(succ_block); jt != need_get.end())
                 auto jt = need_get.find(succ_block);
-                if (jt != need_get.end()) {
+                if (jt != need_get.end())
+                {
                     for (const auto &v : jt->second)
                         outgoing_sets[bname].push_back(
                             make_tuple(succ_block, v, current_name(v)));
@@ -331,7 +351,8 @@ RenameInfo perform_ssa_renaming(
         {
             vector<string> kids(it_dom->second.begin(), it_dom->second.end());
             sort(kids.begin(), kids.end());
-            for (const auto &c : kids) rename_block(c);
+            for (const auto &c : kids)
+                rename_block(c);
         }
 
         name_stack = saved;
@@ -342,8 +363,10 @@ RenameInfo perform_ssa_renaming(
 }
 
 // efficient to just inline this
-static inline bool is_terminator(const json &i) {
-    if (!i.contains("op")) return false;
+static inline bool is_terminator(const json &i)
+{
+    if (!i.contains("op"))
+        return false;
     string op = i["op"];
     return op == "br" || op == "jmp" || op == "ret";
 }
@@ -366,10 +389,12 @@ void add_sets_and_gets(
         for (const auto &[succ, var, val] : svec)
         {
             auto s_it = get_targets.find(succ);
-            if (s_it == get_targets.end()) continue;
+            if (s_it == get_targets.end())
+                continue;
             const auto &mapping = s_it->second;
             auto m_it = mapping.find(var);
-            if (m_it == mapping.end() || m_it->second.empty()) continue;
+            if (m_it == mapping.end() || m_it->second.empty())
+                continue;
 
             json inst;
             inst["op"] = "set";
@@ -384,7 +409,8 @@ void add_sets_and_gets(
         sort(gvec.begin(), gvec.end());
         for (const auto &[oldv, newv] : gvec)
         {
-            if (newv.empty()) continue;
+            if (newv.empty())
+                continue;
             json g;
             g["op"] = "get";
             g["dest"] = newv;
@@ -479,7 +505,8 @@ int main()
 
     cerr << "Transforming to SSA...\n";
     json new_funcs = json::array();
-    for (auto &f : bril["functions"]) {
+    for (auto &f : bril["functions"])
+    {
         f = convert_func_to_ssa(f);
         new_funcs.push_back(f);
     }

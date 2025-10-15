@@ -22,6 +22,7 @@ std::vector<std::vector<json>> gen_basic_blocks(const json &function)
 {
     std::vector<std::vector<json>> basic_blocks;
     std::vector<json> curr_block;
+    bool skip_until_label = false;  // Skip unreachable code after terminators
 
     for (const auto &instr : function.at("instrs"))
     {
@@ -31,16 +32,23 @@ std::vector<std::vector<json>> gen_basic_blocks(const json &function)
 
         if (has_label)
         {
+            skip_until_label = false;  // Reset skip flag when we hit a label
             if (!curr_block.empty())
                 basic_blocks.push_back(curr_block);
             curr_block.clear();
             curr_block.push_back(instr);
+        }
+        else if (skip_until_label)
+        {
+            // Skip unreachable instructions after a terminator
+            continue;
         }
         else if (is_term)
         {
             curr_block.push_back(instr);
             basic_blocks.push_back(curr_block);
             curr_block.clear();
+            skip_until_label = true;  // Skip any instructions until next label
         }
         else
         {

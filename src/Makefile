@@ -5,7 +5,7 @@ INC      ?= -I$(shell brew --prefix)/include
 SRC_COMMON = common.cpp
 HDR_COMMON = common.hpp
 
-all: lvn tdce reaching_definitions dominator_util
+all: lvn tdce reaching_definitions dominator_util to_ssa from_ssa
 
 lvn: lvn.cpp $(SRC_COMMON) $(HDR_COMMON)
 	$(CXX) $(CXXFLAGS) $(INC) lvn.cpp $(SRC_COMMON) -o build/lvn
@@ -18,6 +18,12 @@ reaching_definitions: reaching_definitions.cpp $(SRC_COMMON) $(HDR_COMMON)
 
 dominator_util: dominator_util.cpp $(SRC_COMMON) $(HDR_COMMON)
 	$(CXX) $(CXXFLAGS) $(INC) dominator_util.cpp $(SRC_COMMON) -o build/dominator_util
+
+to_ssa: to_ssa.cpp $(SRC_COMMON) $(HDR_COMMON)
+	$(CXX) $(CXXFLAGS) $(INC) to_ssa.cpp $(SRC_COMMON) -o build/to_ssa
+
+from_ssa: from_ssa.cpp $(SRC_COMMON) $(HDR_COMMON)
+	$(CXX) $(CXXFLAGS) $(INC) from_ssa.cpp $(SRC_COMMON) -o build/from_ssa
 
 clean:
 	rm -f build/*
