@@ -38,3 +38,7 @@ struct value {
 
     static value from_json(const json& j);
 };
+
+
+std::vector<std::vector<json>> add_entry(std::vector<std::vector<json>> blocks, std::string func_name);
+std::unordered_map<std::string, std::unordered_set<std::string>> def_blocks(const std::map<std::string, std::vector<json>> &blocks);
