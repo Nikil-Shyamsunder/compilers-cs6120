@@ -1,11 +1,10 @@
-# llvm-pass-skeleton
+# llvm-pass-swapSub
 
-A completely useless LLVM pass.
+For all integer and floating point subtraction operations, this LLVM pass swaps the LHS and RHS operands of the operation.
 It's for LLVM 17.
 
 Build:
 
-    $ cd llvm-pass-skeleton
     $ mkdir build
     $ cd build
     $ cmake ..
@@ -14,4 +13,4 @@ Build:
 
 Run:
 
-    $ clang -fpass-plugin=`echo build/skeleton/SkeletonPass.*` something.c
+    $ clang -fpass-plugin=`echo build/swapSub/SwapSubPass.*` something.c
