@@ -29,7 +29,7 @@ namespace
                         // errs() << "I saw an instruction: " << I << "\n";
                         if (auto *op = dyn_cast<BinaryOperator>(&I))
                         {
-                            if (op->getOpcode() != Instruction::Sub){
+                            if (!(op->getOpcode() == Instruction::Sub || op->getOpcode() == Instruction::FSub)){
                                 continue;
                             }
 
