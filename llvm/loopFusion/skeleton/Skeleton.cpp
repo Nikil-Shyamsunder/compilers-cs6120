@@ -13,15 +13,21 @@ namespace
 {
 
     // Recursively print a loop and its nested loops with their headers
-    void printLoopAndSubLoops(Loop *L)
+    void findLoopBound(Loop *L, ScalarEvolution &SE)
     {
         // Header h = L->getHeader();
-        errs() << "Found a loop!\n";
+        // errs() << "Found a loop!\n";
+        // unsigned TripCount = SE.getSmallConstantTripCount(L);
+        // Check if the loop has a Canonical Induction Variable (CIV)
 
-        // Recurse over subloops
-        for (Loop *SubLoop : L->getSubLoops())
-        {
-            printLoopAndSubLoops(SubLoop);
+        PHINode *IV = L->getCanonicalInductionVariable();
+        if (!IV) {
+            errs() << "Found a loop! NOT suitable (No Canonical Induction Variable).\n";
+            // Recurse and return
+            for (Loop *SubL : *L) { findLoopBound(SubL, SE); }
+            return; 
+        } else {
+            errs() << "Found a loop with IV!" << *IV << "\n";
         }
     }
 
@@ -44,11 +50,16 @@ namespace
 
             // Request LoopInfo pass for this function
             LoopInfo &LI = FAM.getResult<LoopAnalysis>(F);
+            ScalarEvolution &SE = FAM.getResult<ScalarEvolutionAnalysis>(F);
+
+            // errs() << "Function: " << F.getName() << "\n";
+            // errs() << "Number of top-level loops: " << LI << "\n";
 
             // call recursive print functon for each top level loop
-            for (Loop *TLL : LI)
+            for (Loop *L : LI)
             {
-                printLoopAndSubLoops(TLL);
+                // errs() << "Loop!\n";
+                findLoopBound(L, SE);
             }
         }
     };
@@ -64,8 +75,8 @@ llvmGetPassPluginInfo()
         .PluginVersion = "v0.1",
         .RegisterPassBuilderCallbacks = [](PassBuilder &PB)
         {
-            PB.registerPipelineStartEPCallback(
-                [](ModulePassManager &MPM, OptimizationLevel Level)
+            PB.registerOptimizerEarlyEPCallback(
+                [](ModulePassManager &MPM, OptimizationLevel Level, auto)
                 {
                     MPM.addPass(SkeletonPass());
                 });
