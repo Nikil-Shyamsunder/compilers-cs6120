@@ -1,2 +1,4 @@
 make
 venv
+build
+*.out
