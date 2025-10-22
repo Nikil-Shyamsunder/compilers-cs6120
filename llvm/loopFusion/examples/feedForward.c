@@ -1,10 +1,10 @@
 // multiply vector a and vector b, store result in c and do ReLU
 // split over two loop
 void feedForward(int N, float a[N], float b[N], float c[N]) {
-    int acc = 0;
-    for (int j = 0; j < 50; j++){
-        acc += j;
-    }
+    // int acc = 0;
+    // for (int j = 0; j < 50; j++){
+    //     acc += j;
+    // }
     
     for (int i = 0; i < N; i++) {
         c[i] = a[i] * b[i];
