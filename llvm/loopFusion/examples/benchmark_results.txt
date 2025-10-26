@@ -1,0 +1,41 @@
+Matrix-Vector Multiply Benchmark
+Comparing optimized vs baseline compilation
+
+============================================================
+Benchmarking: Baseline (no optimization pass)
+============================================================
+
+Statistics:
+  Mean:   117686.79 μs
+  Median: 117378.50 μs
+  StdDev: 3339.69 μs
+  Min:    114468 μs
+  Max:    153952 μs
+
+============================================================
+Benchmarking: Optimized (with skeleton pass)
+============================================================
+
+Statistics:
+  Mean:   116430.37 μs
+  Median: 115711.00 μs
+  StdDev: 3683.90 μs
+  Min:    114462 μs
+  Max:    173330 μs
+
+============================================================
+COMPARISON SUMMARY
+============================================================
+
+Baseline mean:  117686.79 μs
+Optimized mean: 116430.37 μs
+
+Speedup:        1.011x
+Improvement:    1.07% faster
+
+95% Confidence Intervals:
+  Baseline:  117686.79 ± 207.00 μs
+  Optimized: 116430.37 ± 228.33 μs
+
+Result: Difference appears statistically significant
+============================================================
