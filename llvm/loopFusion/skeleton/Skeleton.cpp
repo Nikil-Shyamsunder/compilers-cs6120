@@ -1,98 +1,124 @@
+#include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Analysis/LoopInfo.h"
+#include "llvm/IR/CFG.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Analysis/LoopInfo.h"
-#include "llvm/IR/Function.h"
-#include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
 
 namespace
 {
 
-    // Recursively print a loop and its nested loops with their headers
-    void findLoopBound(Loop *L, ScalarEvolution &SE)
+    static bool hasDirectEdge(BasicBlock *From, BasicBlock *To)
     {
-        // check if there's a canonical induction variable for us to find bounds over
-        PHINode *IV = L->getCanonicalInductionVariable();
-        if (!IV)
+        for (BasicBlock *Succ : successors(From))
+            if (Succ == To)
+                return true;
+        return false;
+    }
+
+    static bool blockHasNoSideEffectsExceptTerminator(BasicBlock *BB)
+    {
+        for (Instruction &I : *BB)
         {
-            errs() << "Found a loop! NOT suitable (No Canonical Induction Variable).\n";
-            // recurse and return
-            for (Loop *SubL : *L)
+            if (I.isTerminator())
+                continue;
+
+            if (isa<PHINode>(I) || isa<ICmpInst>(I) || isa<FCmpInst>(I))
+                continue;
+
+            // Allow lifetime intrinsics (llvm.lifetime.start/end)
+            if (auto *II = dyn_cast<IntrinsicInst>(&I))
             {
-                findLoopBound(SubL, SE);
+                if (II->getIntrinsicID() == Intrinsic::lifetime_start ||
+                    II->getIntrinsicID() == Intrinsic::lifetime_end)
+                    continue;
             }
-            return;
-        }
-        else
-        {
-            errs() << "Found a loop with IV!" << *IV << "\n";
-        }
-        std::optional<Loop::LoopBounds> Bounds = Loop::LoopBounds::getBounds(*L, *IV, SE);
-        if (Bounds)
-        {
-            // start bound
-            Value &StartValue = Bounds->getInitialIVValue();
-            errs() << "  Initial IV Value (Start): " << StartValue << "\n";
 
-            // end bound
-            Value &EndValue = Bounds->getFinalIVValue();
-            // This is the limit expression used in the comparison (e.g., N in i < N)
-            errs() << "  Final IV Value (Limit): " << EndValue << "\n";
-
-            // step value
-            Value *StepValue = Bounds->getStepValue();
-            errs() << "  Step Value: " << (StepValue ? *StepValue : *ConstantInt::get(Type::getInt32Ty(SE.getContext()), 1)) << "\n";
-
-            // trip count
-            const SCEV *TripCountSCEV = SE.getBackedgeTakenCount(L);
-            errs() << "  Loop Range Length (Trip Count): " << *TripCountSCEV << "\n";
+            if (I.mayHaveSideEffects() || I.mayReadOrWriteMemory())
+                return false;
         }
-        else
-        {
-            errs() << "Found a loop! NOT SUITABLE (LoopBounds analysis failed).\n";
-        }
-
-        // Recurse into sub-loops
-        for (Loop *SubL : *L)
-        {
-            findLoopBound(SubL, SE);
-        }
+        return true;
     }
 
     struct SkeletonPass : public PassInfoMixin<SkeletonPass>
     {
         PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM)
         {
-            for (auto &F : M)
+            errs() << "=== Loop Fusion Candidate Detector (SkeletonPass) ===\n";
+
+            auto &FAM =
+                AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+
+            for (Function &F : M)
             {
-                runFunction(F, AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager());
+                if (F.isDeclaration())
+                    continue;
+                errs() << "Analyzing function: " << F.getName() << "\n";
+
+                LoopInfo &LI = FAM.getResult<LoopAnalysis>(F);
+
+                SmallVector<Loop *, 8> Top;
+                for (Loop *L : LI)
+                    Top.push_back(L);
+
+                errs() << "  Found " << Top.size() << " top-level loops\n";
+
+                if (Top.size() < 2)
+                    continue;
+
+                // scan all pairs of top-level loops in both orders
+                for (size_t i = 0; i < Top.size(); ++i)
+                {
+                    for (size_t j = 0; j < Top.size(); ++j)
+                    {
+                        if (i == j)
+                            continue;
+
+                        Loop *L1 = Top[i];
+                        Loop *L2 = Top[j];
+
+                        BasicBlock *Hdr1 = L1->getHeader();
+                        BasicBlock *Hdr2 = L2->getHeader();
+                        BasicBlock *Pre2 = L2->getLoopPreheader();
+
+                        if (!Pre2)
+                            continue;
+
+                        // loop adjacency test: L1's exit should lead to L2's entry (preheader)
+                        BasicBlock *L1Exit = L1->getUniqueExitBlock();
+
+                        // if there's a unique exit block, check if it connects to L2's preheader
+                        bool candidate = false;
+                        if (L1Exit && L1Exit == Pre2)
+                        {
+                            candidate = true;
+                        }
+                        else if (L1Exit && hasDirectEdge(L1Exit, Pre2))
+                        {
+                            // L1's exit has a direct edge to L2's preheader
+                            if (blockHasNoSideEffectsExceptTerminator(L1Exit))
+                            {
+                                candidate = true;
+                            }
+                        }
+
+                        if (candidate)
+                        {
+                            errs() << "  Possible fusion candidate in " << F.getName() << ":\n";
+                            errs() << "    Loop 1 header: " << Hdr1->getName() << "\n";
+                            errs() << "    Loop 2 header: " << Hdr2->getName() << "\n";
+                        }
+                    }
+                }
             }
+
             return PreservedAnalyses::all();
-        };
-
-        void runFunction(Function &F, FunctionAnalysisManager &FAM)
-        {
-            // ignore simple declarations
-            if (F.isDeclaration())
-                return;
-
-            // Request LoopInfo pass for this function
-            LoopInfo &LI = FAM.getResult<LoopAnalysis>(F);
-            ScalarEvolution &SE = FAM.getResult<ScalarEvolutionAnalysis>(F);
-
-            // errs() << "Function: " << F.getName() << "\n";
-            // errs() << "Number of top-level loops: " << LI << "\n";
-
-            // call recursive print functon for each top level loop
-            for (Loop *L : LI)
-            {
-                // errs() << "Loop!\n";
-                findLoopBound(L, SE);
-            }
         }
     };
 
@@ -102,14 +128,18 @@ extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
 llvmGetPassPluginInfo()
 {
     return {
-        .APIVersion = LLVM_PLUGIN_API_VERSION,
-        .PluginName = "Skeleton pass",
-        .PluginVersion = "v0.1",
-        .RegisterPassBuilderCallbacks = [](PassBuilder &PB)
+        LLVM_PLUGIN_API_VERSION,
+        "Skeleton pass",
+        "v0.1",
+        [](PassBuilder &PB)
         {
-            PB.registerOptimizerEarlyEPCallback(
-                [](ModulePassManager &MPM, OptimizationLevel Level, auto)
+            PB.registerPipelineStartEPCallback(
+                [](ModulePassManager &MPM, OptimizationLevel Level)
                 {
+                    FunctionPassManager FPM;
+                    FPM.addPass(LoopSimplifyPass());
+                    FPM.addPass(LCSSAPass());
+                    MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
                     MPM.addPass(SkeletonPass());
                 });
         }};
