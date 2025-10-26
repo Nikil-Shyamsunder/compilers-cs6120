@@ -8,6 +8,9 @@
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/Transforms/Utils/ValueMapper.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/raw_ostream.h"
@@ -17,11 +20,14 @@ using namespace llvm;
 namespace
 {
 
-    void findTripCount(Loop *L, ScalarEvolution &SE)
+    const SCEV *getTripCount(Loop *L, ScalarEvolution &SE)
     {
-        // trip count
-        const SCEV *TripCountSCEV = SE.getBackedgeTakenCount(L);
-        errs() << "  Loop Range Length (Trip Count): " << *TripCountSCEV << "\n";
+        return SE.getBackedgeTakenCount(L);
+    }
+
+    void printTripCount(const SCEV *TripCount)
+    {
+        errs() << *TripCount << "\n";
     }
 
     static bool hasDirectEdge(BasicBlock *From, BasicBlock *To)
@@ -53,6 +59,74 @@ namespace
             if (I.mayHaveSideEffects() || I.mayReadOrWriteMemory())
                 return false;
         }
+        return true;
+    }
+
+    // simple fusion: merge L2's body into L1
+    bool fuseLoops(Loop *L1, Loop *L2, LoopInfo &LI)
+    {
+        errs() << "  Attempting to fuse loops...\n";
+
+        BasicBlock *L1Header = L1->getHeader();
+        BasicBlock *L2Header = L2->getHeader();
+
+        // Get the latch (backedge block) of L1
+        BasicBlock *L1Latch = L1->getLoopLatch();
+        if (!L1Latch)
+        {
+            errs() << "  Cannot fuse: L1 has no unique latch\n";
+            return false;
+        }
+
+        SmallVector<BasicBlock *, 8> L2Blocks(L2->blocks().begin(), L2->blocks().end());
+        ValueToValueMapTy VMap;
+
+        PHINode *L1IndVar = nullptr;
+        PHINode *L2IndVar = nullptr;
+
+        for (PHINode &PHI : L1Header->phis())
+        {
+            L1IndVar = &PHI;
+            break;
+        }
+
+        for (PHINode &PHI : L2Header->phis())
+        {
+            L2IndVar = &PHI;
+            break;
+        }
+
+        // map L2's induction variable to L1's - they have the same iteration space
+        if (L1IndVar && L2IndVar)
+        {
+            VMap[L2IndVar] = L1IndVar;
+        }
+
+        // clone L2's body instructions into L1, right before L1's backedge/latch
+        for (BasicBlock *BB : L2Blocks)
+        {
+            for (Instruction &I : *BB)
+            {
+                // skip phi nodes + terminators
+                if (isa<PHINode>(I))
+                    continue;
+                if (I.isTerminator())
+                    continue;
+
+                // clone the instruction
+                Instruction *ClonedInst = I.clone();
+                ClonedInst->insertBefore(L1Latch->getTerminator()->getIterator());
+
+                // remap operands to use L1's values
+                RemapInstruction(ClonedInst, VMap, RF_IgnoreMissingLocals | RF_NoModuleLevelChanges);
+
+                // add to value map for future remapping
+                VMap[&I] = ClonedInst;
+            }
+        }
+
+        errs() << "  Successfully fused loops (instructions merged)!\n";
+        errs() << "  Note: L2 still exists but its work is now done in L1\n";
         return true;
     }
 
@@ -124,17 +198,31 @@ namespace
                             errs() << "  Possible fusion candidate in " << F.getName() << ":\n";
                             errs() << "    Loop 1 header: " << Hdr1->getName() << "\n";
                             errs() << "    Loop 2 header: " << Hdr2->getName() << "\n";
+
+                            const SCEV *TC1 = getTripCount(L1, SE);
+                            const SCEV *TC2 = getTripCount(L2, SE);
+
                             errs() << "    Loop 1 trip count: ";
-                            findTripCount(L1, SE);
+                            printTripCount(TC1);
                             errs() << "    Loop 2 trip count: ";
-                            findTripCount(L2, SE);
+                            printTripCount(TC2);
+
+                            if (TC1 == TC2)
+                            {
+                                errs() << "  Trip counts are equal! Performing fusion...\n";
+                                fuseLoops(L1, L2, LI);
+                            }
+                            else
+                            {
+                                errs() << "  Trip counts differ, skipping fusion\n";
+                            }
                             errs() << "\n";
                         }
                     }
                 }
             }
 
-            return PreservedAnalyses::all();
+            return PreservedAnalyses::none();
         }
     };
 
