@@ -2,6 +2,9 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Transforms/Scalar/IndVarSimplify.h"
+#include "llvm/Transforms/Utils/LoopSimplify.h"
+#include "llvm/Transforms/Utils/LCSSA.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
@@ -13,6 +16,13 @@ using namespace llvm;
 
 namespace
 {
+
+    void findTripCount(Loop *L, ScalarEvolution &SE)
+    {
+        // trip count
+        const SCEV *TripCountSCEV = SE.getBackedgeTakenCount(L);
+        errs() << "  Loop Range Length (Trip Count): " << *TripCountSCEV << "\n";
+    }
 
     static bool hasDirectEdge(BasicBlock *From, BasicBlock *To)
     {
@@ -62,6 +72,7 @@ namespace
                 errs() << "Analyzing function: " << F.getName() << "\n";
 
                 LoopInfo &LI = FAM.getResult<LoopAnalysis>(F);
+                ScalarEvolution &SE = FAM.getResult<ScalarEvolutionAnalysis>(F);
 
                 SmallVector<Loop *, 8> Top;
                 for (Loop *L : LI)
@@ -113,6 +124,11 @@ namespace
                             errs() << "  Possible fusion candidate in " << F.getName() << ":\n";
                             errs() << "    Loop 1 header: " << Hdr1->getName() << "\n";
                             errs() << "    Loop 2 header: " << Hdr2->getName() << "\n";
+                            errs() << "    Loop 1 trip count: ";
+                            findTripCount(L1, SE);
+                            errs() << "    Loop 2 trip count: ";
+                            findTripCount(L2, SE);
+                            errs() << "\n";
                         }
                     }
                 }
@@ -133,8 +149,8 @@ llvmGetPassPluginInfo()
         "v0.1",
         [](PassBuilder &PB)
         {
-            PB.registerPipelineStartEPCallback(
-                [](ModulePassManager &MPM, OptimizationLevel Level)
+            PB.registerOptimizerLastEPCallback(
+                [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase)
                 {
                     FunctionPassManager FPM;
                     FPM.addPass(LoopSimplifyPass());
