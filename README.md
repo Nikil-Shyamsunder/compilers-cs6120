@@ -9,6 +9,6 @@ Compiler implementations for CS 6120 at Cornell using the [Bril IR](https://gith
 - Dataflow analysis (reaching definitions with worklist algorithm)
 - Dominance relation, Dominator tree, and dominance frontier computation on CFGs
 - Into SSA and out of SSA transformations
-- Simple LLVM Passes
+- LLVM Passes (e.g. simple loop fusion pass)
 
 Primary implementations for Bril in C++ in `src/`. LLVM passes in `llvm/`. Tests and benchmarking in `tests/`. Legacy Python implementations in `python/`.
