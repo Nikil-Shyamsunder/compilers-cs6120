@@ -11,7 +11,7 @@ We’ll pick a few (like 1-3) tractable Allo kernels (e.g., 2D conv or other exa
 
 We want to build the following:
 - A working backend capable of compiling the chosen kernels from Allo IR to the ASIC tool’s input (Catapult-friendly C++ with directives **or** XLS DSLX).
-- Golden tests, simulation harnesses, and synthesis scripts.
+- Golden tests
 
 **How will you do it?**
 - Select 2–3 kernels that define a tractable subset of Allo to write a backend for
@@ -22,14 +22,9 @@ We want to build the following:
 - Write equivalence test benches that compare Allo reference outputs vs. target-sim outputs.
 
 **How will you empirically measure success?**
-- Exact output equivalence against Allo golden references across randomized inputs and edge cases.
-- Deterministic simulation passing in both the Allo reference interpreter and the target's simulator.
-- The chosen nontrivial kernels compile and run end-to-end on the target.
-- To test quality, maybe we synthesize to RTL and measure area proxies and timing?
-
-**Engineering quality**
-- Reproducible scripts (one-command build/sim).
-- Clear docs on IR assumptions, lowering rules, and any semantics gaps discovered (e.g., bit-width or array aliasing differences).
+- That our system builds/runs: The chosen nontrivial kernels compile and run end-to-end on the target.
+- That our system is correct: Exact output equivalence against Allo golden references across randomized inputs and edge cases.
+- That our system is somewhat fast/quality: To test quality, maybe we synthesize to RTL and measure area proxies and timing?
 
 ## Team members
 - Cynthia Shao (@CynyuS)
