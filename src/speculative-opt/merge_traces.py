@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
 import json
 import os
 import subprocess
 from pathlib import Path
 
-# Directories
 BENCHMARKS_DIR = Path("../../../bril/benchmarks/core/")
 TRACES_DIR = Path("processed_traces/")
 OUTPUT_DIR = Path("merged/")
